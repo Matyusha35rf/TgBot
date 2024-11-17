@@ -18,12 +18,12 @@ dp = Dispatcher(storage=storage)
 CATALOG_FILE = "catalog.json"
 
 # Переменная для хранения статуса
-status = "неизвестен"
+status = "неизвестно"
 
 # Определение клавиатур
 admin_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="Я в общаге"), KeyboardButton(text="Меня нет в общаге")],
+        [KeyboardButton(text="Изменить статус")],
         [KeyboardButton(text="Добавить товар"), KeyboardButton(text="Удалить товар")],
         [KeyboardButton(text="Просмотреть каталог")]
     ],
@@ -32,7 +32,7 @@ admin_kb = ReplyKeyboardMarkup(
 
 user_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="Узнать где Матвей")],
+        [KeyboardButton(text="Когда можно забрать товар?")],
         [KeyboardButton(text="Каталог"), KeyboardButton(text="Связаться")]
     ],
     resize_keyboard=True
@@ -43,6 +43,7 @@ user_kb = ReplyKeyboardMarkup(
 class ProductState(StatesGroup):
     waiting_for_name = State()
     waiting_for_number = State()
+    waiting_for_status_update = State()
 
 
 def load_catalog():
@@ -76,35 +77,36 @@ async def start_handler(message: types.Message):
     if message.from_user.id == ADMIN_ID:
         await message.answer("Привет, Матвей! Используй кнопки для управления.", reply_markup=admin_kb)
     else:
-        await message.answer("Привет! Нажмите кнопку, чтобы узнать, где Матвей, просмотреть каталог или связаться с ним.", reply_markup=user_kb)
+        await message.answer("Привет!\nНажмите кнопку, чтобы узнать, когда можно забрать товар,\
+                              просмотреть каталог или связаться с ним.", reply_markup=user_kb)
 
 
-@dp.message(lambda message: message.text in ["Я в общаге", "Меня нет в общаге"])
-async def status_update(message: types.Message):
+@dp.message(lambda message: message.text in ["Изменить статус"])
+async def status_update(message: types.Message, state: FSMContext):
     """
     Обновление статуса Матвея.
     """
     global status
     if message.from_user.id == ADMIN_ID:
-        if message.text == "Я в общаге":
-            status = "Матвей в общаге"
-        elif message.text == "Меня нет в общаге":
-            status = "Матвея нет в общаге"
-        await message.answer("Ваш статус обновлён.")
+        await message.answer("Введите статус!")
+        await state.set_state(ProductState.waiting_for_status_update)
     else:
         await message.answer("Эта команда доступна только для Матвея.")
 
+@dp.message(ProductState.waiting_for_status_update) 
+async def status_update(message: types.Message, state: FSMContext):
+    global status
+    status = message.text
+    await message.answer("Статус обновлён!")
+    
 
-@dp.message(lambda message: message.text == "Узнать где Матвей")
+@dp.message(lambda message: message.text == "Когда можно забрать товар?")
 async def get_status(message: types.Message):
     """
     Сообщение статуса другим пользователям.
     """
     global status
-    if status == "неизвестен":
-        await message.answer("Статус Матвея пока не обновлён.")
-    else:
-        await message.answer(status)
+    await message.answer(status)
 
 
 @dp.message(lambda message: message.text == "Связаться")
