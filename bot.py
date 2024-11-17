@@ -1,5 +1,9 @@
 import asyncio
+import csv
+import datetime
 import json
+import os
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.filters import Command
@@ -18,12 +22,12 @@ dp = Dispatcher(storage=storage)
 CATALOG_FILE = "catalog.json"
 
 # Переменная для хранения статуса
-status = "неизвестно"
+status = "неизвестен"
 
 # Определение клавиатур
 admin_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="Изменить статус")],
+        [KeyboardButton(text="Я в общаге"), KeyboardButton(text="Меня нет в общаге")],
         [KeyboardButton(text="Добавить товар"), KeyboardButton(text="Удалить товар")],
         [KeyboardButton(text="Просмотреть каталог")]
     ],
@@ -32,7 +36,7 @@ admin_kb = ReplyKeyboardMarkup(
 
 user_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="Когда можно забрать товар?")],
+        [KeyboardButton(text="Узнать где Матвей")],
         [KeyboardButton(text="Каталог"), KeyboardButton(text="Связаться")]
     ],
     resize_keyboard=True
@@ -43,7 +47,6 @@ user_kb = ReplyKeyboardMarkup(
 class ProductState(StatesGroup):
     waiting_for_name = State()
     waiting_for_number = State()
-    waiting_for_status_update = State()
 
 
 def load_catalog():
@@ -69,6 +72,54 @@ def save_catalog(catalog):
 catalog = load_catalog()
 
 
+def update_client(id_tg, username):
+    fieldnames = ['ID', 'ID_TG', 'Имя пользователя', 'Зарегистрирован', 'Последний вход']
+    clients = []
+    client_exists = False
+    current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    max_id = 0
+
+    # Проверка, существует ли файл
+    if os.path.exists("clients.csv"):
+        with open("clients.csv", mode='r', encoding='utf-8', newline='') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                # Обновляем max_id
+                try:
+                    row_id = int(row['ID'])
+                    if row_id > max_id:
+                        max_id = row_id
+                except ValueError:
+                    pass  # Игнорируем строки с некорректным ID
+
+                # Проверяем наличие клиента с данным ID_TG
+                if row['ID_TG'] == str(id_tg):
+                    row['Последний вход'] = current_time
+                    client_exists = True
+                    print(f"Клиент с ID_TG={id_tg} обновлен.")
+                clients.append(row)
+    else:
+        print(f"Файл client.csv не найден. Будет создан новый файл.")
+
+    if not client_exists:
+        new_id = max_id + 1
+        new_client = {
+            'ID': str(new_id),
+            'ID_TG': str(id_tg),
+            'Имя пользователя': username,
+            'Зарегистрирован': current_time,
+            'Последний вход': current_time
+        }
+        clients.append(new_client)
+        print(f"Новый клиент с ID_TG={id_tg} добавлен.")
+
+    # Запись обратно в CSV
+    with open("clients.csv", mode='w', encoding='utf-8', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(clients)
+
+
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
     """
@@ -77,36 +128,38 @@ async def start_handler(message: types.Message):
     if message.from_user.id == ADMIN_ID:
         await message.answer("Привет, Матвей! Используй кнопки для управления.", reply_markup=admin_kb)
     else:
-        await message.answer("Привет!\nНажмите кнопку, чтобы узнать, когда можно забрать товар,\
-                              просмотреть каталог или связаться с ним.", reply_markup=user_kb)
+        update_client(message.from_user.id, message.from_user.username)
+        await message.answer(
+            "Привет! Нажмите кнопку, чтобы узнать, где Матвей, просмотреть каталог или связаться с ним.",
+            reply_markup=user_kb)
 
 
-@dp.message(lambda message: message.text in ["Изменить статус"])
-async def status_update(message: types.Message, state: FSMContext):
+@dp.message(lambda message: message.text in ["Я в общаге", "Меня нет в общаге"])
+async def status_update(message: types.Message):
     """
     Обновление статуса Матвея.
     """
     global status
     if message.from_user.id == ADMIN_ID:
-        await message.answer("Введите статус!")
-        await state.set_state(ProductState.waiting_for_status_update)
+        if message.text == "Я в общаге":
+            status = "Матвей в общаге"
+        elif message.text == "Меня нет в общаге":
+            status = "Матвея нет в общаге"
+        await message.answer("Ваш статус обновлён.")
     else:
         await message.answer("Эта команда доступна только для Матвея.")
 
-@dp.message(ProductState.waiting_for_status_update) 
-async def status_update(message: types.Message, state: FSMContext):
-    global status
-    status = message.text
-    await message.answer("Статус обновлён!")
-    
 
-@dp.message(lambda message: message.text == "Когда можно забрать товар?")
+@dp.message(lambda message: message.text == "Узнать где Матвей")
 async def get_status(message: types.Message):
     """
     Сообщение статуса другим пользователям.
     """
     global status
-    await message.answer(status)
+    if status == "неизвестен":
+        await message.answer("Статус Матвея пока не обновлён.")
+    else:
+        await message.answer(status)
 
 
 @dp.message(lambda message: message.text == "Связаться")
@@ -150,7 +203,7 @@ async def remove_product(message: types.Message, state: FSMContext):
         if not catalog:
             await message.answer("Каталог пуст, нечего удалять.")
         else:
-            catalog_list = "\n".join([f"{i+1}. {item}" for i, item in enumerate(catalog)])
+            catalog_list = "\n".join([f"{i + 1}. {item}" for i, item in enumerate(catalog)])
             await message.answer(f"Каталог:\n{catalog_list}\n\nВведите номер товара, который хотите удалить.")
             await state.set_state(ProductState.waiting_for_number)
     else:
@@ -181,7 +234,7 @@ async def view_catalog_admin(message: types.Message):
     Просмотр каталога товаров (администратор).
     """
     if catalog:
-        catalog_list = "\n".join([f"{i+1}. {item}" for i, item in enumerate(catalog)])
+        catalog_list = "\n".join([f"{i + 1}. {item}" for i, item in enumerate(catalog)])
         await message.answer(f"Каталог:\n{catalog_list}")
     else:
         await message.answer("Каталог пуст.")
@@ -193,7 +246,7 @@ async def view_catalog_user(message: types.Message):
     Просмотр каталога товаров (пользователь).
     """
     if catalog:
-        catalog_list = "\n".join([f"{i+1}. {item}" for i, item in enumerate(catalog)])
+        catalog_list = "\n".join([f"{i + 1}. {item}" for i, item in enumerate(catalog)])
         await message.answer(f"Каталог:\n{catalog_list}")
     else:
         await message.answer("Каталог пуст.")
@@ -207,7 +260,8 @@ async def fallback(message: types.Message):
     if message.from_user.id == ADMIN_ID:
         await message.answer("Используй кнопки для управления.", reply_markup=admin_kb)
     else:
-        await message.answer("Нажмите кнопку, чтобы узнать, где Матвей, просмотреть каталог или связаться с ним.", reply_markup=user_kb)
+        await message.answer("Нажмите кнопку, чтобы узнать, где Матвей, просмотреть каталог или связаться с ним.",
+                             reply_markup=user_kb)
 
 
 async def main():
