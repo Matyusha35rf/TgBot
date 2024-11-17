@@ -1,3 +1,3 @@
 BOT_TOKEN = "7510037566:AAEeRUiH0pQODTEhSWkj6zEcpc-6zPEN-2w"
 ADMIN_ID = 1331469795
-ADMIN_USERNAME = "https://t.me/Masyanya2342"
+ADMIN_USERNAME = "https://t.me/tiiigrrrrrrrrr"
