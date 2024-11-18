@@ -156,6 +156,8 @@ async def status_update(message: types.Message, state: FSMContext):
     global status
     if message.text == 'Н':
         status = "Неизвестно😞"
+    elif message.text == 'С':
+        status = "Сейчас🔥"
     else:
         status = message.text
     await message.answer(f"Статус обновлён на \"{status}\"!")
