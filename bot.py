@@ -253,6 +253,7 @@ async def view_catalog_user(message: types.Message):
     """
     Просмотр каталога товаров (пользователь).
     """
+    update_client(message.from_user.id, message.from_user.username)
     if catalog:
         catalog_list = "\n".join([f"{i + 1}. {item}" for i, item in enumerate(catalog)])
         await message.answer(f"Каталог:\n{catalog_list}")
