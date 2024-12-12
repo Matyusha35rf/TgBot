@@ -154,13 +154,14 @@ async def status_update(message: types.Message, state: FSMContext):
 @dp.message(ProductState.waiting_for_status_update)
 async def status_update(message: types.Message, state: FSMContext):
     global status
-    if message.text == 'Н':
+    if message.text.upper() == 'Н':
         status = "Неизвестно😞"
-    elif message.text == 'С':
+    elif message.text.upper() == 'С':
         status = "Сейчас🔥"
     else:
         status = message.text
     await message.answer(f"Статус обновлён на \"{status}\"!")
+    await state.clear()
 
 
 @dp.message(lambda message: message.text == "Когда можно забрать товар?")
